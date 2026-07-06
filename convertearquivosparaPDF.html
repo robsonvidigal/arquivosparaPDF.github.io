@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mesclador de PDF e Imagens</title>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 700px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        input[type="file"] {
+            margin-bottom: 20px;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 14px;
+            margin-right: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button.btn-apagar {
+            background-color: #dc3545;
+        }
+        button.btn-apagar:hover {
+            background-color: #c82333;
+        }
+        button.btn-salvar {
+            background-color: #28a745;
+            font-size: 16px;
+            padding: 10px 20px;
+            margin-top: 15px;
+        }
+        button.btn-salvar:hover {
+            background-color: #218838;
+        }
+        button.btn-limpar {
+            background-color: #6c757d;
+            font-size: 16px;
+            padding: 10px 20px;
+            margin-top: 15px;
+        }
+        button.btn-limpar:hover {
+            background-color: #5a6268;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #listaArquivos {
+            list-style-type: none;
+            padding: 0;
+            margin-bottom: 20px;
+        }
+        #listaArquivos li {
+            background: #fff;
+            margin-bottom: 8px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .controles-lista {
+            display: flex;
+        }
+        #status {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Juntar Imagens e PDFs</h2>
+    
+    <input type="file" id="fileInput" multiple accept=".pdf, .png, .jpg, .jpeg" onchange="adicionarArquivos(event)">
+    
+    <ul id="listaArquivos"></ul>
+
+    <input type="text" id="tituloCapa" placeholder="Digite o título da capa (Se vazio, um código de data/hora será gerado)...">
+    <textarea id="observacoes" rows="4" placeholder="Adicione observações aqui (elas aparecerão na primeira página do PDF)..."></textarea>
+    
+    <button class="btn-salvar" onclick="gerarPDF()">Salvar PDF</button>
+    <button class="btn-limpar" onclick="limparTudo()">Limpar Tudo</button>
+    <p id="status"></p>
+
+    <script>
+        let arquivosSelecionados = [];
+
+        function adicionarArquivos(event) {
+            const files = event.target.files;
+            for (let i = 0; i < files.length; i++) {
+                arquivosSelecionados.push(files[i]);
+            }
+            document.getElementById('fileInput').value = ""; 
+            renderizarLista();
+        }
+
+        function renderizarLista() {
+            const lista = document.getElementById('listaArquivos');
+            lista.innerHTML = ""; 
+
+            arquivosSelecionados.forEach((arquivo, index) => {
+                const li = document.createElement('li');
+                
+                const spanNome = document.createElement('span');
+                spanNome.innerText = `${index + 1}. ${arquivo.name}`;
+                
+                const divControles = document.createElement('div');
+                divControles.className = 'controles-lista';
+
+                const btnSubir = document.createElement('button');
+                btnSubir.innerText = "↑";
+                btnSubir.disabled = index === 0;
+                btnSubir.onclick = () => moverArquivo(index, -1);
+
+                const btnDescer = document.createElement('button');
+                btnDescer.innerText = "↓";
+                btnDescer.disabled = index === arquivosSelecionados.length - 1;
+                btnDescer.onclick = () => moverArquivo(index, 1);
+
+                const btnApagar = document.createElement('button');
+                btnApagar.innerText = "Apagar";
+                btnApagar.className = "btn-apagar";
+                btnApagar.onclick = () => apagarArquivo(index);
+
+                divControles.appendChild(btnSubir);
+                divControles.appendChild(btnDescer);
+                divControles.appendChild(btnApagar);
+
+                li.appendChild(spanNome);
+                li.appendChild(divControles);
+                lista.appendChild(li);
+            });
+        }
+
+        function moverArquivo(index, direcao) {
+            const novoIndex = index + direcao;
+            if (novoIndex < 0 || novoIndex >= arquivosSelecionados.length) return;
+
+            const temp = arquivosSelecionados[index];
+            arquivosSelecionados[index] = arquivosSelecionados[novoIndex];
+            arquivosSelecionados[novoIndex] = temp;
+            
+            renderizarLista();
+        }
+
+        function apagarArquivo(index) {
+            arquivosSelecionados.splice(index, 1);
+            renderizarLista();
+        }
+
+        // Função para limpar todos os dados da tela
+        function limparTudo() {
+            arquivosSelecionados = [];
+            document.getElementById('fileInput').value = "";
+            document.getElementById('tituloCapa').value = "";
+            document.getElementById('observacoes').value = "";
+            document.getElementById('status').innerText = "";
+            renderizarLista();
+        }
+
+        async function gerarPDF() {
+            const status = document.getElementById('status');
+            const tituloInput = document.getElementById('tituloCapa').value.trim();
+            const observacoes = document.getElementById('observacoes').value.trim();
+
+            if (arquivosSelecionados.length === 0) {
+                status.innerText = "Por favor, adicione pelo menos um arquivo na lista.";
+                status.style.color = "red";
+                return;
+            }
+
+            status.innerText = "Processando arquivos... Aguarde.";
+            status.style.color = "blue";
+
+            try {
+                const { PDFDocument, StandardFonts, rgb } = PDFLib;
+                const pdfFinal = await PDFDocument.create();
+                
+                const fontePadrao = await pdfFinal.embedFont(StandardFonts.Helvetica);
+                const fonteNegrito = await pdfFinal.embedFont(StandardFonts.HelveticaBold);
+                
+                const capa = pdfFinal.addPage();
+                const larguraCapa = capa.getWidth();
+                const alturaCapa = capa.getHeight();
+                
+                const agora = new Date();
+                const dataHoraAtual = agora.toLocaleString('pt-BR');
+                
+                // --- CAPA: Definindo o Título ---
+                let tituloFinal = tituloInput;
+                if (tituloFinal === "") {
+                    const dia = String(agora.getDate()).padStart(2, '0');
+                    const mes = String(agora.getMonth() + 1).padStart(2, '0');
+                    const ano = agora.getFullYear();
+                    const horas = String(agora.getHours()).padStart(2, '0');
+                    const minutos = String(agora.getMinutes()).padStart(2, '0');
+                    tituloFinal = `${dia}${mes}${ano}${horas}${minutos}`;
+                }
+
+                const tamanhoTitulo = 24;
+                const larguraTextoTitulo = fonteNegrito.widthOfTextAtSize(tituloFinal, tamanhoTitulo);
+                
+                capa.drawText(tituloFinal, { 
+                    x: (larguraCapa - larguraTextoTitulo) / 2, 
+                    y: alturaCapa - 100, 
+                    size: tamanhoTitulo, 
+                    font: fonteNegrito 
+                });
+
+                // --- Variável para controlar a posição Y na capa dinamicamente ---
+                let posYAtual = alturaCapa - 150;
+
+                // --- CAPA: Data e Hora ---
+                capa.drawText(`Gerado em: ${dataHoraAtual}`, { 
+                    x: 50, 
+                    y: posYAtual, 
+                    size: 14, 
+                    font: fontePadrao 
+                });
+                posYAtual -= 40; // Dá um espaço para o próximo item
+
+                // --- CAPA: Observações (Aparece apenas se houver texto) ---
+                if (observacoes !== "") {
+                    capa.drawText('Observações:', { 
+                        x: 50, 
+                        y: posYAtual, 
+                        size: 14, 
+                        font: fonteNegrito 
+                    });
+                    posYAtual -= 20;
+                    
+                    const linhas = observacoes.split('\n');
+                    linhas.forEach(linha => {
+                        capa.drawText(linha, { x: 50, y: posYAtual, size: 12, font: fontePadrao });
+                        posYAtual -= 15; 
+                    });
+                    posYAtual -= 20; // Espaço extra após as observações
+                }
+
+                // --- CAPA: Índice de Arquivos ---
+                capa.drawText('Índice de Arquivos:', { 
+                    x: 50, 
+                    y: posYAtual, 
+                    size: 14, 
+                    font: fonteNegrito 
+                });
+                posYAtual -= 20;
+
+                for (let i = 0; i < arquivosSelecionados.length; i++) {
+                    const nomeArquivo = `${i + 1}. ${arquivosSelecionados[i].name}`;
+                    capa.drawText(nomeArquivo, { 
+                        x: 50, 
+                        y: posYAtual, 
+                        size: 12, 
+                        font: fontePadrao 
+                    });
+                    posYAtual -= 15; // Desce uma linha para o próximo arquivo
+                }
+
+                // Processa os arquivos na ordem da lista
+                for (let i = 0; i < arquivosSelecionados.length; i++) {
+                    const file = arquivosSelecionados[i];
+                    const arrayBuffer = await file.arrayBuffer();
+
+                    if (file.type === 'application/pdf') {
+                        const pdfAdicional = await PDFDocument.load(arrayBuffer);
+                        const pages = await pdfFinal.copyPages(pdfAdicional, pdfAdicional.getPageIndices());
+                        pages.forEach(page => pdfFinal.addPage(page));
+
+                    } else if (file.type === 'image/jpeg' || file.type === 'image/png') {
+                        let imagem;
+                        if (file.type === 'image/jpeg') {
+                            imagem = await pdfFinal.embedJpg(arrayBuffer);
+                        } else {
+                            imagem = await pdfFinal.embedPng(arrayBuffer);
+                        }
+                        
+                        const page = pdfFinal.addPage([imagem.width, imagem.height]);
+                        page.drawImage(imagem, {
+                            x: 0,
+                            y: 0,
+                            width: imagem.width,
+                            height: imagem.height,
+                        });
+                    }
+                }
+
+                // --- RODAPÉ: Adicionando data e hora nas demais páginas ---
+                const todasPaginas = pdfFinal.getPages();
+                for (let j = 1; j < todasPaginas.length; j++) {
+                    const pag = todasPaginas[j];
+                    const pagLargura = pag.getWidth();
+                    
+                    const textoRodape = `Gerado em: ${dataHoraAtual}`;
+                    const tamanhoFonteRodape = 10;
+                    const larguraTextoRodape = fontePadrao.widthOfTextAtSize(textoRodape, tamanhoFonteRodape);
+                    
+                    pag.drawText(textoRodape, {
+                        x: pagLargura - larguraTextoRodape - 20, 
+                        y: 20, 
+                        size: tamanhoFonteRodape,
+                        font: fontePadrao,
+                        color: rgb(0.4, 0.4, 0.4) 
+                    });
+                }
+
+                // Salva e faz o download
+                const pdfBytes = await pdfFinal.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'documento_final.pdf';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+
+                status.innerText = "PDF salvo com sucesso!";
+                status.style.color = "green";
+
+            } catch (error) {
+                console.error(error);
+                status.innerText = "Ocorreu um erro ao gerar o PDF. Verifique se os arquivos são válidos.";
+                status.style.color = "red";
+            }
+        }
+    </script>
+</body>
+</html>
